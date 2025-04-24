@@ -1,0 +1,76 @@
+import bibtexparser
+import requests
+from bs4 import BeautifulSoup
+import os
+import time
+from unidecode import unidecode
+
+# Caminhos
+CAMINHO_BIB = r'A:/05_USUARIOS/Nadelly Gama/Nuvem de Palavras/python/artigos.bib'
+PASTA_PDFS = r'A:/05_USUARIOS/Nadelly Gama/Nuvem de Palavras/pdfs'
+os.makedirs(PASTA_PDFS, exist_ok=True)
+
+# Função para baixar PDF
+def baixar_pdf(doi, titulo):
+    url = f"https://doi.org/{doi}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+
+    try:
+        resposta = requests.get(url, headers=headers, timeout=10)
+        resposta.raise_for_status()
+
+        soup = BeautifulSoup(resposta.text, 'html.parser')
+
+        links = soup.find_all('a')
+        for link in links:
+            href = link.get('href', '')
+            if 'pdf' in href.lower():
+                if href.startswith('/'):
+                    href = f"https://{resposta.url.split('/')[2]}{href}"
+                elif not href.startswith('http'):
+                    href = f"https://{resposta.url.split('/')[2]}/{href}"
+
+                print("🔗 Baixando:", href)
+
+                nome_arquivo = unidecode(titulo.lower().replace(' ', '_')[:50]) + ".pdf"
+                caminho_arquivo = os.path.join(PASTA_PDFS, nome_arquivo)
+
+                pdf = requests.get(href, headers=headers)
+                with open(caminho_arquivo, 'wb') as f:
+                    f.write(pdf.content)
+
+                print(f"✅ PDF salvo como: {nome_arquivo}")
+                return True
+
+        print("❌ Link de PDF não encontrado:", url)
+        return False
+
+    except Exception as e:
+        print("⚠️ Erro ao acessar:", url)
+        print(e)
+        return False
+
+# Corrige o .bib se tiver @Artigo
+with open(CAMINHO_BIB, encoding='utf-8') as bibtex_file:
+    content = bibtex_file.read()
+    content_corrigido = content.replace('@Artigo', '@article')
+
+bib_database = bibtexparser.loads(content_corrigido)
+
+# 🧠 Começa do artigo preferido
+print(f"\n📚 Iniciando o download a partir do artigo preferido (até {len(bib_database.entries)})...\n")
+
+for i, entry in enumerate(bib_database.entries[737:], start=738):  # começa no índice requerido
+    titulo = entry.get('title', f'artigo_{i}')
+    doi = entry.get('doi')
+
+    print(f"\n📄 {i}. {titulo}")
+
+    if doi:
+        baixar_pdf(doi, titulo)
+    else:
+        print(f"⚠️ Artigo {i} não possui DOI, pulando...")
+
+    time.sleep(3)  # Aguarda pra não sobrecarregar
+
+print("\n🏁 Fim do processo! Todos os artigos foram processados.")
